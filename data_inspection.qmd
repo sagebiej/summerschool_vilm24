@@ -1,0 +1,186 @@
+---
+title: "Data Inspection"
+author: "Julian Sagebiel"
+date: "2024-06-29"
+format: 
+  html:
+    toc: true
+    toc-depth: 2
+    css: styles.css
+    code-fold: true
+    code-tools: true
+    theme: 
+      light: "flatly"
+      dark: "darkly"
+highlight-style: github
+---
+
+# Read data and inspect
+
+The data is somehow hidden in an RDS file.
+
+```{r, message=FALSE}
+rm(list=ls())
+library(kableExtra)
+library(dplyr)
+library(choiceTools)
+library(ggplot2)
+library(purrr)
+
+
+
+data <- readRDS("simulateddata_n10000.RDS")[["des1"]][[2]] %>% 
+  select(-c("Split", "group","logdist", "HNV_SQsq", "HNV_sharesq", starts_with(c("V","e_", "U_"))))
+
+```
+
+We first look at the first 100 rows of the dataset
+
+
+```{r}
+
+kable(data[1:100,], digits = 2) %>% kable_styling()
+
+
+
+```
+
+
+
+
+
+```{r}
+
+descriptions <- c("Respndent identifier", "Identifier for each choice situation", paste0(1:5,". attribute in alternative 1"),
+                  "Alternative Specific Constant for Status Quo", "Unique identifier of the Block (if blocks are present)" , 
+                  "Longitude of respondent's home", "latitude of respondent's home", "Radius where the changes take place", 
+                  "Respondents Status Quo of NHV", 
+                  "Respondents Status Quo of protected areas", 
+                  paste0("Share of ",c("HNV","protected area"), " in respondent's area"), 
+                  paste0("Absolute value of protected area adapted to respondent's status quo in alternative ",1:2),
+                  paste0("Absolute value of HNV adapted to respondent's status quo in alternative ",1:2),
+                  paste0("Square of absolute value of protected area adapted to respondents status quo in alternative ",1:2),
+                  paste0("Square of absolute value of HNV adapted to respondent's status quo in alternative ",1:2), 
+                  "Chosen Alternative"
+                  
+                  
+                  )
+
+description_table <- data.frame(
+  ColumnName = names(data),
+  Description = descriptions
+)
+
+
+
+kable(description_table) %>% kable_styling()
+```
+
+
+
+Things to note:
+
+- Each respondent replied to `r length(data$ID[data$ID==1])` choice sets.
+- Each row is one choice set
+- Each respondent has a unique status quo
+
+
+
+
+
+
+
+```{r}
+
+
+# Create the data for the table
+attributes <- data.frame(
+  Column1 = c("x1", "x2", "x3", "x4", "x5"),
+  Column2 = c("High nature value farmland", "Visibility", "Protected Area", "Accessibility", "Payment"),
+  Column3 = c(
+    "Extention of High Nature Value areas in ha.",
+    "Visibility of the area, considering how well it can be seen from roads an paths.",
+    "Extention of protected areas in ha.",
+    "To what extent the area is accessable",
+    "The yearly contribution by an individual"
+  ),
+  Column4 = c("1 = 100 ha etc.", "0 = not visible, 1 = visible", "1 = 100 ha etc." , "0= not accessable, 1 = half of new area accessable, 2 = full new area accessable", "0.5 =50 Euro etc.")
+)
+
+# Create the table using kable
+kable(attributes, col.names = c("Variable", "Short description", "Description", "Levels"), 
+      caption = "Sample Table") %>% kable_styling()
+
+```
+
+
+
+Before we start estimating models, we should always first descriptively look at the data. 
+
+One important graph is the bid curve. It tells us the frequencies of chosen alternatives given the price level
+
+
+```{r}
+
+
+summary <- data %>% 
+  select(alt1_x5,CHOICE) %>% 
+  group_by(alt1_x5) %>% 
+    summarize(
+    count = sum(CHOICE == 1),
+    total = n(),
+    proportion = count / total
+  )
+
+
+kable(summary) %>% kable_styling()
+
+
+ggplot(summary, aes(x=alt1_x5, y=proportion)) +
+  geom_line()
+
+```
+
+
+
+You can write a function to automate this
+
+
+```{r}
+relative_freq <- function(group_var) {
+  data %>%
+    select({{ group_var }}, CHOICE) %>%
+    group_by({{ group_var }}) %>%
+    summarize(
+      count = sum(CHOICE == 1),
+      total = n(),
+      proportion = count / total
+    )
+}
+
+
+relative_freq(alt1_x1)
+
+relative_freq(alt1_x2)
+
+
+```
+
+To automate that more, you could use a loop
+
+```{r}
+
+attr <- names(data %>% select(starts_with("alt1_x")))
+
+map(attr,~relative_freq(!!sym(.x)))
+
+```
+
+
+
+
+# Model estimation
+
+
+Once we think we understood the data,
+

@@ -1,0 +1,81 @@
+/* Ensure the body uses the full width of the monitor */
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+}
+
+/* Override the Bootstrap container class to use full width */
+.container, .container-fluid {
+  width: 100% !important;
+  max-width: 100% !important;
+  margin: 0 !important;
+  padding-left: 20px;
+  padding-right: 20px;
+}
+
+/* Ensure headers, footers, and main sections also use full width */
+header, footer, main, nav, .content {
+  width: 100% !important;
+  max-width: 100% !important;
+  margin: 0;
+  padding: 0;
+}
+
+/* Override specific container width constraints */
+.container-xl, .container-lg, .container-md, .container-sm, .container-xs {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+/* Adjust padding for readability within rows */
+.container > .row, .container-fluid > .row {
+  padding-left: 20px;
+  padding-right: 20px;
+}
+
+/* Ensure full width for any additional containers or wrappers */
+.wrapper, .page-wrapper, .site-content {
+  width: 100% !important;
+  max-width: 100% !important;
+  margin: 0;
+  padding: 0;
+}
+
+
+
+
+
+body {
+  font-family: Arial, sans-serif;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  color: #2c3e50;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+table, th, td {
+  border: 1px solid #ddd;
+}
+
+th, td {
+  padding: 8px;
+  text-align: left;
+}
+
+th {
+  background-color: #f2f2f2;
+}
+
+code {
+  background-color: #f8f8f8;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+
