@@ -49,3 +49,9 @@ po/*~
 
 # RStudio Connect folder
 rsconnect/
+
+Estimation_results/
+Figures/
+GIS/
+counties_gis.rds
+data_inspection_files/
