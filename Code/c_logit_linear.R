@@ -5,7 +5,7 @@ database <- data
 ### initialise apollo and core settings
 apollo_initialise()
 apollo_control= list (
-  modelName = "Clogit GP",
+  modelName = "Clogit_linear",
   modelDescr ="Conditional Logit Model Linear",
   indivID = "ID",
   mixing = FALSE,

@@ -1,9 +1,10 @@
 ---
-title: "Data Inspection"
+title: "Data Inspection and Analysis"
 author: "Julian Sagebiel"
-date: "2024-06-29"
+date: "2024-07-12"
 format: 
   html:
+    page-layout: full
     toc: true
     toc-depth: 2
     css: styles.css
@@ -26,6 +27,8 @@ library(dplyr)
 library(choiceTools)
 library(ggplot2)
 library(purrr)
+library(apollo)
+library(texreg)
 
 
 
@@ -159,7 +162,7 @@ map(attr,~relative_freq(!!sym(.x)))
 
 # Model estimation
 
-Once we think we understood the data,
+Once we think we understood the data, we will prepare the data 
 
 ```{r}
 # Create Dummys for Accessibility of Protected areas
@@ -168,7 +171,52 @@ data <- data %>% mutate(Dummy_Half = case_when(alt1_x4 == 1 ~ 1, TRUE~0),
                         Dummy_Full = case_when(alt1_x4 == 2 ~ 1, TRUE~0))
 ```
 
-Estimate model with utility function specified as in the data generating process. Estimate model with the apollo package.
+
+The first model we estimate follows the following linear utility function
+
+$$U_1= \beta_{hnv}*x1+\beta_{vis}*x2 + \beta_{prot}*x3 + \beta_{acc}*x4 + \beta_{cost} * x5   $$
+And for the Status Quo, we just add a constant
+
+$$U_{SQ} = \beta_{SQ}$$
+
+We estimate the model with the `apollo` package and the code is stored in `"Code/c_logit_linear.R"`
+
+We can open this file to look into it. To estimate the model, we source it here.
+
+We store the model as an RDS file, so we do not need to estimate it anytime we run the code.
+
+
+```{r, eval=FALSE}
+source("Code/c_logit_linear.R")
+```
+
+Once we have estimated and stored the model, we can quickly load it.
+```{r, message=FALSE}
+
+# Load model
+model_linear <- apollo_loadModel("Estimation_results/Clogit_linear")
+
+model_linear_tex <- quicktexregapollo(model_linear)
+```
+
+And look into model results.
+
+
+
+```{r, results='asis'}
+htmlreg(model_linear,single.row = TRUE,digits = 2)
+```
+
+We can also look into willingness to pay by applying the WTP fomula
+
+$$ WTP_a = \cfrac{\partial U/\partial a}{\partial U / \partial_c} $$
+
+
+
+Estimate model with utility function incorporating non-linear utility. 
+
+
+
 
 ```{r, eval=FALSE, message=FALSE}
 source("Code/c_logit_model_gp.R")

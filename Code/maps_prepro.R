@@ -19,7 +19,7 @@ sum_cover <- function(x){
 
 buffer_dist = 15000 # distance we use in dce simulation 
 
-##### 2 Load in model data
+
 
 #### 3 Read in data for Germany with administrative borders ####
 
