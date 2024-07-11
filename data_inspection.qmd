@@ -36,7 +36,6 @@ data <- readRDS("simulateddata_n10000.RDS")[["des1"]][[1]] %>%
 
 We first look at the first 100 rows of the dataset
 
-
 ```{r}
 
 kable(data[1:100,], digits = 2) %>% kable_styling()
@@ -44,10 +43,6 @@ kable(data[1:100,], digits = 2) %>% kable_styling()
 
 
 ```
-
-
-
-
 
 ```{r}
 
@@ -76,19 +71,11 @@ description_table <- data.frame(
 kable(description_table) %>% kable_styling()
 ```
 
-
-
 Things to note:
 
-- Each respondent replied to `r length(data$ID[data$ID==1])` choice sets.
-- Each row is one choice set
-- Each respondent has a unique status quo
-
-
-
-
-
-
+-   Each respondent replied to `r length(data$ID[data$ID==1])` choice sets.
+-   Each row is one choice set
+-   Each respondent has a unique status quo
 
 ```{r}
 
@@ -113,12 +100,9 @@ kable(attributes, col.names = c("Variable", "Short description", "Description", 
 
 ```
 
-
-
-Before we start estimating models, we should always first descriptively look at the data. 
+Before we start estimating models, we should always first descriptively look at the data.
 
 One important graph is the bid curve. It tells us the frequencies of chosen alternatives given the price level
-
 
 ```{r}
 
@@ -141,10 +125,7 @@ ggplot(summary, aes(x=alt1_x5, y=proportion)) +
 
 ```
 
-
-
 You can write a function to automate this
-
 
 ```{r}
 relative_freq <- function(group_var) {
@@ -176,14 +157,9 @@ map(attr,~relative_freq(!!sym(.x)))
 
 ```
 
-
-
-
 # Model estimation
 
-
 Once we think we understood the data,
-
 
 ```{r}
 # Create Dummys for Accessibility of Protected areas
@@ -192,29 +168,77 @@ data <- data %>% mutate(Dummy_Half = case_when(alt1_x4 == 1 ~ 1, TRUE~0),
                         Dummy_Full = case_when(alt1_x4 == 2 ~ 1, TRUE~0))
 ```
 
+Estimate model with utility function specified as in the data generating process. Estimate model with the apollo package.
 
-Estimate model with utility function specified as in the data generating process.
-Estimate model with the apollo package.
-```{r, eval=TRUE}
+```{r, eval=FALSE, message=FALSE}
 source("Code/c_logit_model_gp.R")
 ```
 
-```{r}
+Load estimated model if you don't want to reestimate the model.
+
+```{r, message=FALSE}
 library(apollo)
 # Load model
 model_gp <- apollo_loadModel("Estimation_results/Clogit GP")
 ```
 
-# Create Maps
+Take a look at the estimated model.
 
 ```{r}
+apollo_modelOutput(model_gp)
+```
+
+Plot utility function for HNV.
+
+```{r}
+u_hnv <- function(x, y) {y$estimate["mu_hnv"]*x + y$estimate["mu_hnv2"]*x^2} # Use coefficient names of estimated model
+
+data_vector <- c(0:350)
+
+data_vec_utility <- u_hnv(data_vector, model_gp)
+
+ggplot() +
+  geom_line(aes(x=data_vector, y=data_vec_utility), col="peru") +
+  xlab("Status Quo HNV in 100ha") +
+  ylab("Utility")
+
+```
+
+Calculate WTP from estimated model.
+
+```{r}
+###### Calculate WTP for HNV ####
+
+model_gp$estimate
+
+wtp_hnv <- function(x, y) {100*-((y$estimate[["mu_hnv"]] + 2*y$estimate["mu_hnv2"]*x)/y$estimate["mu_cost"])}
+
+
+```
+
+Plot WTP function for HNV.
+
+```{r}
+
+data_vec_wtp <- wtp_hnv(data_vector, model_gp)
+
+
+ggplot() +
+  geom_line(aes(x=data_vector, y=data_vec_wtp), col="peru") +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "black") + 
+  xlab("Status Quo HNV in 100ha") +
+  ylab("WTP (€/100ha)")
+```
+
+# Create Maps
+
+```{r, message=FALSE}
 # Load GIS packages 
 library(ggspatial)
 library(viridis)
 library(sf)
 library(terra)
 ```
-
 
 Load in GIS county data
 
@@ -226,20 +250,12 @@ counties_gis <- readRDS("counties_gis.rds")
 germany_county <- st_transform(germany_county, st_crs(counties_gis$geometry)) # Harmonize crs's
 ```
 
-Caclulate WTP from estimated model.
+Plot WTP for 100ha increase in HNV for all German counties.
 
 ```{r}
-###### Calculate WTP for HNV ####
-
-model_gp$estimate
-
-wtp_hnv <- function(x, y) {-((y$estimate[[2]] + 2*y$estimate[3]*x)/y$estimate[8])}
-
-counties_wtp <-counties_gis %>% mutate(WTP_HNV = 100*wtp_hnv(Average_HNV_SQ/100, model_gp)) # WTP in €/100ha
-```
+counties_wtp <-counties_gis %>% mutate(WTP_HNV = wtp_hnv(Average_HNV_SQ/100, model_gp)) # WTP in €/100ha
 
 
-```{r}
 # Plot HNV WTP distribution
 ggplot(data=germany_county) + 
   geom_sf(fill="gray98", alpha=1) +
@@ -255,9 +271,9 @@ ggplot(data=germany_county) +
 ```{r}
 ###### Calculate WTP for Protected Areas ####
 
-wtp_pa <- function(x, y) {-((y$estimate[[5]] + 2*y$estimate[6]*x)/y$estimate[8])}
+wtp_pa <- function(x, y) {100*-((y$estimate[["mu_pa"]] + 2*y$estimate["mu_pa2"]*x)/y$estimate["mu_cost"])}
 
-counties_wtp <-counties_gis %>% mutate(WTP_Prot = 100*wtp_pa(Average_Prot_SQ/100, model_gp)) # WTP in €/100ha
+counties_wtp <-counties_gis %>% mutate(WTP_Prot = wtp_pa(Average_Prot_SQ/100, model_gp)) # WTP in €/100ha
 ```
 
 ```{r}
@@ -273,3 +289,38 @@ ggplot(data=germany_county) +
   theme(plot.margin = unit(c(0.1,0.1,0.1,0.1), "cm"))
 ```
 
+Mapping the aggregated WTP per 5x5km raster cells
+
+Procedure:
+
+1\. Calculate status quo of HNV for 5x5km cells.
+
+2\. Calculate marginal WTP for each raster cell using model estimates.
+
+3\. Match population density data and compute WTP per cell.
+
+Here we simply read in the preprocessed raster with the aggregated WTP values and plot it.
+
+```{r}
+wtp_raster_agg <- rast("hnv_wtp.tif") # Read in preprocessed raster with WTP values
+
+wtp_hnv_gg <- as.data.frame(wtp_raster_agg, xy=TRUE)
+
+wtp_hnv_gg$mean <- wtp_hnv_gg$mean/1000000
+
+wtp_hnv_gg$cuts <- cut(wtp_hnv_gg$mean, breaks = c(-2, 0, 0.5, 1, 2, 5, 8, 12, 20, 30, 50))
+
+ggplot(data=wtp_hnv_gg) +
+  geom_tile(aes(x = x, y = y, fill = cuts)) +
+  coord_equal() +
+  annotation_scale(location = "bl", width_hint = 0.1,plot_unit="m", line_width = 0.1) +
+  annotation_north_arrow(location = "br" ,pad_x = unit(0, "in"), pad_y = unit(0, "in"),
+                         style = north_arrow_fancy_orienteering) +
+  scale_fill_viridis(option = "F", discrete=TRUE, 
+                     labels=c("< 0", "0 - 0.5", "0.5 - 1", "1 - 2", "2 - 5", "5 - 8", "8 - 12",
+                              "12 - 20", "20 - 30", "> 30")) +
+  xlab("") +
+  ylab("") +
+  labs(fill ="Aggregated WTP \n(Mio. €/100ha) HNV") +
+  theme(legend.position = "right")
+```

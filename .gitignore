@@ -55,3 +55,7 @@ Figures/
 GIS/
 counties_gis.rds
 data_inspection_files/
+
+Code/maps_repro.R
+
+hnv_wtp.tif

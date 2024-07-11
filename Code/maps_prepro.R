@@ -19,15 +19,7 @@ sum_cover <- function(x){
 
 buffer_dist = 15000 # distance we use in dce simulation 
 
-#### 2 Load in model data ####
-#map_data <- readRDS("output/96_3runs_4designs_mixl_2023-08-14.RDS")
-
-# Use estimates from first simulated model for example map
-
-# model1 <- as.data.frame(map_data$ort2attr[[1]]$estimate)
-# 
-# model1 <- rownames_to_column(model1)
-# colnames(model1) <- c("Parameter", "Estimate")
+##### 2 Load in model data
 
 #### 3 Read in data for Germany with administrative borders ####
 
@@ -82,7 +74,7 @@ hnv_counties <- hnv_counties %>% mutate(Total_area = HNV_Area*(1/HNV_share),
 
 ###### Calculate WTP based on share for HNV ####
 
-wtp_hnv <- function(x) {-((c_logit_gp$estimate[[2]] + 2*c_logit_gp$estimate[3]*x)/c_logit_gp$estimate[8])}
+wtp_hnv <- function(x, y) {100*-((y$estimate[["mu_hnv"]] + 2*y$estimate["mu_hnv2"]*x)/y$estimate["mu_cost"])}
 
 hnv_counties <- hnv_counties %>% mutate(WTP_HNV = 100*wtp_hnv(Average_HNV_SQ/100))
 
@@ -288,20 +280,125 @@ ggsave("Figures/hnv_share.png", width = 7, height = 5, dpi="print")
 
 ##### Scaling ####
 
-scale_factor <- pi*(buffer_dist/1000)^2 # Calculate total area that is valued in the DCE as scaling factor
+scale_factor <- pi*(buffer_dist/1000)^2*100 # Calculate total area that is valued in the DCE as scaling factor
 
 ###### Raster HNV (need to work on this further) ####
 #inefficient as hell 
 
-agg_hnv <- aggregate(hnv, fact=10, fun=mean)
+agg_hnv <- aggregate(hnv, fact=50, fun=mean)
 
-agg_corine_hnv <- aggregate(corine_hnv, fact=10, fun=mean)
+####### HERE ################################################################################################################################
+grid <- rast(agg_hnv, vals = values(agg_hnv)) # empty raster
 
-check_list <- c(unlist(values(agg_hnv)))
+grid_points <- as.points(grid, values=TRUE, na.rm=TRUE, na.all=FALSE)
 
+grid_points_gg <- as.data.frame(grid, xy=TRUE)
+
+
+
+buffer_pts <- buffer(grid_points, buffer_dist)
+
+# Compute people within Buffer 
+hnv_in_buffer <- terra::extract(agg_hnv, buffer_pts, fun= sum, na.rm =T, weights = TRUE) 
+
+hnv_cells <- hnv_in_buffer
+
+hnv_cells$`eea_r_3035_100_m_hnv-farmland-ac_2012_v1_r00` <- hnv_cells$`eea_r_3035_100_m_hnv-farmland-ac_2012_v1_r00`*((buffer_dist/1000)^2*pi/5^2)*100
+
+
+
+grid_points_gg <- rowid_to_column(grid_points_gg, var = "ID")
+
+grid_merge <- left_join(grid_points_gg, hnv_cells, by="ID")
+
+colnames(grid_merge) <- c("ID", "x", "y", "HNV_Share", "HNV Area within 15km")
+
+
+grid_merge <- grid_merge %>% mutate(WTP_HNV = wtp_hnv(`HNV Area within 15km`/100, model_gp))
+
+ggplot(data=grid_merge) +
+  geom_tile(aes(x = x, y = y, fill = WTP_HNV)) +
+  coord_equal() +
+  annotation_scale(location = "bl", width_hint = 0.1,plot_unit="m", line_width = 0.1) +
+  annotation_north_arrow(location = "br" ,pad_x = unit(0, "in"), pad_y = unit(0, "in"),
+                         style = north_arrow_fancy_orienteering) +
+  scale_fill_gradientn(colours = c("white", "cornsilk1", "peru")) 
+
+
+
+density_raster <- rast("GIS/data/BBSR_Landnutzung_Bevoelkerung/ewz250_2011_v1_multi.tif")
+
+
+agg_dens <- terra::aggregate(density_raster, fact=20, fun=sum, na.rm=TRUE)
+
+dens_gg <- as.data.frame(agg_dens, xy=TRUE)
+colnames(dens_gg) <- c("x", "y", "Density")
+
+
+ggplot(data=dens_gg) +
+  geom_tile(aes(x = x, y = y, fill = Density)) +
+  coord_equal() +
+  annotation_scale(location = "bl", width_hint = 0.1,plot_unit="m", line_width = 0.1) +
+  annotation_north_arrow(location = "br" ,pad_x = unit(0, "in"), pad_y = unit(0, "in"),
+                         style = north_arrow_fancy_orienteering) +
+  scale_fill_viridis(option="C", direction = 1)
+
+new_raster <- rast(ncols=ncol(agg_dens), nrows=nrow(agg_dens), 
+                   xmin=xmin(agg_dens), xmax=xmax(agg_dens), 
+                   ymin=ymin(agg_dens), ymax=ymax(agg_dens), 
+                   crs=crs(agg_dens))
+
+# Convert the data frame to a SpatVector
+points <- vect(grid_merge, geom=c("x", "y"), crs=crs(agg_dens))
+
+# Rasterize the points using HNV_Share as the values
+wtp_raster <- rasterize(points, new_raster, field="WTP_HNV", fun="mean")
+
+wtp_raster_agg <- wtp_raster * agg_dens
+
+writeRaster(wtp_raster_agg, "hnv_wtp.tif")
+
+library(tidyterra)
+library(ggpubr)
+wtp_hnv_plot <- ggplot() +
+  geom_spatraster(data = wtp_raster_agg/1000000) +
+  scale_fill_viridis_c(option = "F") +
+  labs(fill="Agg. WTP (Million€/100ha) HNV")
+
+
+pop_dense_plot <- ggplot() +
+  geom_spatraster(data = agg_dens) +
+  scale_fill_viridis_c(option = "F") +
+  labs(fill="Population Density")
+
+ggarrange(wtp_hnv_plot, pop_dense_plot, legend = "bottom")
+
+
+wtp_hnv_gg <- as.data.frame(wtp_raster_agg, xy=TRUE)
+
+wtp_hnv_gg$mean <- wtp_hnv_gg$mean/1000000
+
+wtp_hnv_gg$cuts <- cut(wtp_hnv_gg$mean, breaks = c(-2, 0, 0.5, 1, 2, 5, 8, 12, 20, 30, 50))
+
+ggplot(data=wtp_hnv_gg) +
+  geom_tile(aes(x = x, y = y, fill = cuts)) +
+  coord_equal() +
+  annotation_scale(location = "bl", width_hint = 0.1,plot_unit="m", line_width = 0.1) +
+  annotation_north_arrow(location = "br" ,pad_x = unit(0, "in"), pad_y = unit(0, "in"),
+                         style = north_arrow_fancy_orienteering) +
+  scale_fill_viridis(option = "F", discrete=TRUE, 
+                     labels=c("< 0", "0 - 0.5", "0.5 - 1", "1 - 2", "2 - 5", "5 - 8", "8 - 12",
+                              "12 - 20", "20 - 30", "> 30")) +
+  xlab("") +
+  ylab("") +
+  labs(fill ="Aggregated WTP \n(Mio. €/100ha) HNV") +
+  theme(legend.position = "right")
+
+ggsave("Figures/agg_wtp.png", width=12, height = 10, dpi=1000)
+############################################################################################################################################
 
 # try something, check this 
-agg_hnv_wtp <- -(model1$Estimate[[4]] + 2*model1$Estimate[5]*(check_list*100))/model1$Estimate[6]
+agg_hnv_wtp <- wtp_hnv(check_list*scale_factor, model_gp)
 
 values(agg_hnv) <- agg_hnv_wtp/scale_factor
 
@@ -437,7 +534,7 @@ ggplot(data=grid_merge) +
   annotation_scale(location = "bl", width_hint = 0.1,plot_unit="m", line_width = 0.1) +
   annotation_north_arrow(location = "br" ,pad_x = unit(0, "in"), pad_y = unit(0, "in"),
                          style = north_arrow_fancy_orienteering) +
-  scale_fill_viridis(option="C", direction = 1)
+  scale_fill_gradientn(colours = c("white", "cornsilk1", "peru")) 
 
 ggsave("Figures/agg_wtp_example.png", dpi="print", width = 7, height = 5)
 
