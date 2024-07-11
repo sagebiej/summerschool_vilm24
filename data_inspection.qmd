@@ -194,7 +194,7 @@ data <- data %>% mutate(Dummy_Half = case_when(alt1_x4 == 1 ~ 1, TRUE~0),
 
 
 Estimate model with utility function specified as in the data generating process.
-
+Estimate model with the apollo package.
 ```{r, eval=TRUE}
 source("Code/c_logit_model_gp.R")
 ```
@@ -205,7 +205,7 @@ library(apollo)
 model_gp <- apollo_loadModel("Estimation_results/Clogit GP")
 ```
 
-# Create MAPS 
+# Create Maps
 
 ```{r}
 # Load GIS packages 
@@ -226,6 +226,7 @@ counties_gis <- readRDS("counties_gis.rds")
 germany_county <- st_transform(germany_county, st_crs(counties_gis$geometry)) # Harmonize crs's
 ```
 
+Caclulate WTP from estimated model.
 
 ```{r}
 ###### Calculate WTP for HNV ####
