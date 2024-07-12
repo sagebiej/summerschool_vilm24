@@ -1,19 +1,12 @@
 library("apollo")
 
-
-# Create Dummys for Accessibility of Protected areas
-
-data <- data %>% mutate(Dummy_Half = case_when(alt1_x4 == 1 ~ 1, TRUE~0),
-                        Dummy_Full = case_when(alt1_x4 == 2 ~ 1, TRUE~0))
-
-
 database <- data
 
 ### initialise apollo and core settings
 apollo_initialise()
 apollo_control= list (
-  modelName = "Clogit GP",
-  modelDescr ="Conditional Logit Model GP",
+  modelName = "Clogit_linear_sq",
+  modelDescr ="Conditional Logit Model Linear with actual levels",
   indivID = "ID",
   mixing = FALSE,
   outputDirectory = "Estimation_results"
@@ -28,10 +21,10 @@ apollo_control= list (
 ### set starting values all to 0 
 apollo_beta=c(mu_asc    = 0,
               mu_hnv  = 0,
-              mu_hnv2 = 0,
+              
               mu_hnv_vis  = 0,
               mu_pa  = 0,
-              mu_pa2 = 0,
+              
               mu_pa_acc = 0,
               mu_cost = 0)
 
@@ -63,12 +56,12 @@ apollo_probabilities=function(apollo_beta, apollo_inputs, functionality="estimat
   
   ### List of utilities (later integrated in mnl_settings below) #added interaction of price and personal income 
   V = list()
-  V[['alt1']] = mu_hnv * alt1_HNV + mu_hnv2 * alt1_HNVsq + mu_hnv_vis * alt1_x2 + 
-                mu_pa * alt1_protected + mu_pa2 * alt1_protectedsq + mu_pa_acc * alt1_x4 + 
+  V[['alt1']] = mu_hnv * alt1_HNV + mu_hnv_vis * alt1_x2 + 
+                mu_pa * alt1_protected  + mu_pa_acc * alt1_x4 + 
                 mu_cost * alt1_x5
   
-  V[['alt2']] = mu_asc + mu_hnv * alt2_HNV + mu_hnv2 * alt2_HNVsq 
-                mu_pa * alt2_protected + mu_pa2 * alt2_protectedsq 
+  V[['alt2']] = mu_asc + mu_hnv * alt2_HNV +
+                mu_pa * alt2_protected 
   
   
   ### Define settings for MNL model component
@@ -96,10 +89,10 @@ apollo_probabilities=function(apollo_beta, apollo_inputs, functionality="estimat
 #### MODEL ESTIMATION                                            ####
 # ################################################################# #
 
-c_logit_gp = apollo_estimate(apollo_beta, apollo_fixed,
+c_logit_linear_sq = apollo_estimate(apollo_beta, apollo_fixed,
                                     apollo_probabilities, apollo_inputs, estimate_settings=list(estimationRoutine="bfgs",
                                                                                                 hessianRoutine="maxLik"))
 
-apollo_saveOutput(c_logit_gp)
+apollo_saveOutput(c_logit_linear_sq)
 
 

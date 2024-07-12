@@ -1,9 +1,10 @@
 ---
-title: "Data Inspection and Analysis"
+title: "Breakout Session Choice Experiments"
 author: "Julian Sagebiel"
 date: "2024-07-12"
 format: 
   html:
+    self-contained: true 
     page-layout: full
     toc: true
     toc-depth: 2
@@ -18,9 +19,20 @@ highlight-style: github
 
 # Read data and inspect
 
-The data is somehow hidden in an RDS file.
+
+
+The whole project can be downloaded here https://cloud.idiv.de/nextcloud/index.php/s/8xXJexMYg5KGasY or here https://tinyurl.com/bschoice24 
+
+Make sure you have installed the following packages. The package choiceTools is only available on gitlab and can be installed if you copy the following code into your R console 
+
+`remotes::install_gitlab("dj44vuri/choicetools", host = "https://git.idiv.de")`
+
+
+In this case, the data is stored in an RDS file.
 
 ```{r, message=FALSE}
+
+
 rm(list=ls())
 library(kableExtra)
 library(dplyr)
@@ -32,16 +44,16 @@ library(texreg)
 
 
 
-data <- readRDS("simulateddata_n10000.RDS")[["des1"]][[1]] %>% 
-  select(-c("Split", "group","logdist", "HNV_SQsq", "HNV_sharesq", starts_with(c("V","e_", "U_"))))
+data <- readRDS("data/simulateddata_n10000.RDS")[["des1"]][[1]] %>% 
+  select(-c("Split", "group","logdist","alt2_sq" , "HNV_SQsq", "HNV_sharesq", starts_with(c("V","e_", "U_"))))
 
 ```
 
-We first look at the first 100 rows of the dataset
+We first look at the first 40 rows of the dataset.
 
 ```{r}
 
-kable(data[1:100,], digits = 2) %>% kable_styling()
+kable(data[1:40,], digits = 2) %>% kable_styling()
 
 
 
@@ -50,7 +62,7 @@ kable(data[1:100,], digits = 2) %>% kable_styling()
 ```{r}
 
 descriptions <- c("Respndent identifier", "Identifier for each choice situation", paste0(1:5,". attribute in alternative 1"),
-                  "Alternative Specific Constant for Status Quo", "Unique identifier of the Block (if blocks are present)" , 
+                  "Unique identifier of the Block (if blocks are present)" , 
                   "Longitude of respondent's home", "latitude of respondent's home", "Radius where the changes take place", 
                   "Respondents Status Quo of NHV", 
                   "Respondents Status Quo of protected areas", 
@@ -88,9 +100,9 @@ attributes <- data.frame(
   Column1 = c("x1", "x2", "x3", "x4", "x5"),
   Column2 = c("High nature value farmland", "Visibility", "Protected Area", "Accessibility", "Payment"),
   Column3 = c(
-    "Extention of High Nature Value areas in ha.",
-    "Visibility of the area, considering how well it can be seen from roads an paths.",
-    "Extention of protected areas in ha.",
+    "Extention of High Nature Value areas in ha",
+    "Visibility of the area, considering how well it can be seen from roads an paths",
+    "Extention of protected areas in ha",
     "To what extent the area is accessable",
     "The yearly contribution by an individual"
   ),
@@ -103,9 +115,9 @@ kable(attributes, col.names = c("Variable", "Short description", "Description", 
 
 ```
 
-Before we start estimating models, we should always first descriptively look at the data.
+Before we start estimating models, we should descriptively look at the data.
 
-One important graph is the bid curve. It tells us the frequencies of chosen alternatives given the price level
+One important graph is the bid curve. It tells us the (relative) frequencies of chosen alternatives given the price level
 
 ```{r}
 
@@ -128,7 +140,8 @@ ggplot(summary, aes(x=alt1_x5, y=proportion)) +
 
 ```
 
-You can write a function to automate this
+
+We may want to repeat this with other attributes. To avoid repeating code, we write a function and loop it over all attributes.
 
 ```{r}
 relative_freq <- function(group_var) {
@@ -150,31 +163,22 @@ relative_freq(alt1_x2)
 
 ```
 
-To automate that more, you could use a loop
+To repeat the function over all attributes, we could use a loop (in this case `map` from the `purrr` package).
 
 ```{r}
 
-attr <- names(data %>% select(starts_with("alt1_x")))
+attr <- names(data %>% select(starts_with("alt1_x")))  # identify attributes
 
-map(attr,~relative_freq(!!sym(.x)))
+map(attr,~relative_freq(!!sym(.x)))                    # loop over attributes
 
 ```
 
 # Model estimation
 
-Once we think we understood the data, we will prepare the data 
-
-```{r}
-# Create Dummys for Accessibility of Protected areas
-
-data <- data %>% mutate(Dummy_Half = case_when(alt1_x4 == 1 ~ 1, TRUE~0),
-                        Dummy_Full = case_when(alt1_x4 == 2 ~ 1, TRUE~0))
-```
-
 
 The first model we estimate follows the following linear utility function
 
-$$U_1= \beta_{hnv}*x1+\beta_{vis}*x2 + \beta_{prot}*x3 + \beta_{acc}*x4 + \beta_{cost} * x5   $$
+$$U_1= \beta_{hnv}*alt1\_x1+\beta_{vis}*alt1_x2 + \beta_{prot}*alt1\_x3 + \beta_{acc}*alt1\_x4 + \beta_{cost} * alt1\_x5   $$
 And for the Status Quo, we just add a constant
 
 $$U_{SQ} = \beta_{SQ}$$
@@ -187,7 +191,7 @@ We store the model as an RDS file, so we do not need to estimate it anytime we r
 
 
 ```{r, eval=FALSE}
-source("Code/c_logit_linear.R")
+source("Code/c_logit_model_linear.R")
 ```
 
 Once we have estimated and stored the model, we can quickly load it.
@@ -204,7 +208,7 @@ And look into model results.
 
 
 ```{r, results='asis'}
-htmlreg(model_linear,single.row = TRUE,digits = 2)
+htmlreg(model_linear_tex,single.row = TRUE,digits = 2)
 ```
 
 We can also look into willingness to pay by applying the WTP formula
@@ -216,19 +220,72 @@ $$ WTP_a = \cfrac{\partial U/\partial a}{\partial U / \partial_c} $$
 
 
 
-Estimate model with utility function incorporating non-linear utility. 
+
+```{r}
+deltaMethod_settings=list(expression=c(WTP_HNV="-10*mu_hnv/(mu_cost)",
+                                       WTP_Vis="-10*mu_hnv_vis/(mu_cost)"
+                                       ))
+WTP= apollo_deltaMethod(model_linear, deltaMethod_settings)
+```
+
+In this model, a 100 ha increase translates to a willingness to pay of `r WTP$Value[1]*100`. If the area is visible, willingness to pay is `r WTP$Value[1]*100`. This is not very realistic. The willingness to pay for visibility may depend on the total increase in HNV. And the willingness to pay for 1ha more HNV may not be constant.
 
 
+
+We could also use the actual ha values in the model. This is  `r "Code/c_logit_model_linear_sq.R"`
+
+
+```{r, eval=FALSE, include=FALSE}
+source("Code/c_logit_model_linear_sq.R")
+```
+
+
+```{r, message=FALSE, include=FALSE}
+
+# Load model
+model_linearsq <- apollo_loadModel("Estimation_results/Clogit_linear_sq")
+
+model_linearsq_tex <- quicktexregapollo(model_linearsq)
+```
+
+And look into model results.
+
+
+
+```{r, results='asis'}
+htmlreg(list(model_linear_tex, model_linearsq_tex),single.row = TRUE,digits = 2)
+```
+
+### Non Linear Specification
+
+
+Now lets assume that the marginal utility of one more unit HNV and protected area is non-linear.
+
+As a first try, we assume a quadratic relationship. 
+
+The utility function is 
+
+ $$ U_1= \beta_{hnv}*alt1\_HNV+ \beta_{hnv2} *alt1\_HNVsq + \beta_{vis}*alt1\_x2 + \beta_{prot}*alt1\_protected  + \beta_{prot2}*alt1\_protectedsq  + \beta_{acc}*x4 + \beta_{cost} * x5    $$
+ 
+ 
+ 
+ and the utility for the status quo is 
+ 
+ $$ U_2= \beta_{sq} + \beta_{hnv}*alt2\_HNV+ + \beta_{hnv2} *alt2\_HNVsq + \beta_{prot}*alt2\_protected  + \beta_{prot2}*alt2\_protectedsq $$ 
 
 
 ```{r, eval=FALSE, message=FALSE}
 source("Code/c_logit_model_gp.R")
 ```
 
+
+
+
+
 Load estimated model if you don't want to reestimate the model.
 
 ```{r, message=FALSE}
-library(apollo)
+
 # Load model
 model_gp <- apollo_loadModel("Estimation_results/Clogit GP")
 ```
@@ -260,7 +317,7 @@ Calculate WTP from estimated model.
 ```{r}
 ###### Calculate WTP for HNV ####
 
-model_gp$estimate
+
 
 wtp_hnv <- function(x, y) {100*-((y$estimate[["mu_hnv"]] + 2*y$estimate["mu_hnv2"]*x)/y$estimate["mu_cost"])}
 
